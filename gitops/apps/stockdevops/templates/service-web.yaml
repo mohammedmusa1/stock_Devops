@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-web
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: stockdevops
+spec:
+  type: NodePort # Exposed externally to the host node (AWS EC2)
+  ports:
+    - port: {{ .Values.web.service.port }}
+      targetPort: http
+      nodePort: {{ .Values.web.service.nodePort }}
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ .Release.Name }}-web

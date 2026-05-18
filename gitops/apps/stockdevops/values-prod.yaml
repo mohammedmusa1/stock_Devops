@@ -1,0 +1,72 @@
+# ==============================================================================
+# PRODUCTION OVERRIDES OPTIMIZED FOR AWS t3.large EC2 (8GB RAM, 2 vCPUs)
+# ==============================================================================
+global:
+  environment: production
+  domain: stockdevops.mohammedmusa.dev
+
+# 1. NestJS Backend API Configuration
+api:
+  replicaCount: 3 # High availability: scheduling multiple pods across node cores
+  image:
+    repository: mohammedmusa1/stockdevops-api
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  service:
+    port: 4000
+  resources:
+    # Optimized limits: strict budgeting to stay within 8GB t3.large memory limits
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  hpa:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 75
+
+# 2. NextJS Frontend Web Configuration
+web:
+  replicaCount: 2 # Redundancy for instant load times
+  image:
+    repository: mohammedmusa1/stockdevops-web
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  service:
+    port: 3000
+    nodePort: 30000 # Direct external access via EC2:30000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+
+# 3. PostgreSQL Database Configuration
+postgresql:
+  enabled: true
+  storage:
+    size: 10Gi
+    storageClass: stockdevops-gp3-sc
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# 4. Redis Cache Configuration
+redis:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi

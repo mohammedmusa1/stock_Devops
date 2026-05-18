@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: ci-cd
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/part-of: stockdevops-ci-cd
+    app.kubernetes.io/component: ci-server
+spec:
+  replicas: 1 # State-heavy server, keep at 1 replica
+  strategy:
+    type: Recreate # Recreate to prevent dual-mount of PV (gp3 is ReadWriteOnce)
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      serviceAccountName: jenkins-sa
+      securityContext:
+        fsGroup: 1000 # Matches Jenkins default user GID (critical for PV ownership permissions)
+        runAsUser: 1000
+      containers:
+      - name: jenkins
+        image: jenkins/jenkins:lts-jdk17 # Highly stable LTS release
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        - name: jnlp
+          containerPort: 50000 # Inbound agent port
+        env:
+        - name: JAVA_OPTS
+          value: "-Xms512m -Xmx1024m -XX:+UseG1GC" # Direct JVM tuning to honor K8s resource constraints
+        resources:
+          requests:
+            cpu: 100m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 1.5Gi
+        livenessProbe:
+          httpGet:
+            path: /login
+            port: 8080
+          initialDelaySeconds: 90 # Generous warm-up window for Jenkins plugin loading
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /login
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: jenkins-home
+          mountPath: /var/jenkins_home
+      volumes:
+      - name: jenkins-home
+        persistentVolumeClaim:
+          claimName: jenkins-home-pvc

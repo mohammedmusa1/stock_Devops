@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-api-policy
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: stockdevops
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-api
+  policyTypes:
+  - Ingress # Secure inbound traffic
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: {{ .Release.Name }}-web # Only allow traffic originating from Web frontend pods
+    ports:
+    - protocol: TCP
+      port: {{ .Values.api.service.port }}
+  # We also allow Prometheus in the monitoring namespace to scrape health metrics
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: {{ .Values.api.service.port }}

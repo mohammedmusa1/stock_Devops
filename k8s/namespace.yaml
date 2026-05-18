@@ -1,0 +1,13 @@
+# ==========================================
+# 1. NAMESPACE MANIFEST (stockdevops)
+# ==========================================
+# Isolates the StockDevOps application environment from other tenants.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stockdevops
+  labels:
+    # Standard Kubernetes labels for resource discovery and grouping
+    app.kubernetes.io/name: stockdevops
+    app.kubernetes.io/part-of: stockdevops-project
+    environment: production

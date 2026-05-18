@@ -1,0 +1,58 @@
+name: "GitOps Manifest Validation & Compliance"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-yaml:
+    name: "Validate Kubernetes Manifests & Lint Helm"
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout the GitOps repository code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Set up Python for yamllint tool
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 3. Install yamllint to ensure correct syntax formatting
+      - name: Install YAML Lint
+        run: |
+          pip install yamllint
+
+      # 4. Run YAML syntax check
+      - name: Run yamllint
+        run: |
+          yamllint -d "{extends: relaxed, rules: {line-length: {max: 180}}}" gitops/
+
+      # 5. Set up Helm CLI to test dry-run and lint templates
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      # 6. Lint the StockDevOps Helm Chart
+      - name: Lint Helm Chart
+        run: |
+          helm lint gitops/apps/stockdevops/
+
+      # 7. Render Helm templates and dry-run apply via client validation
+      - name: Render Helm Dry-Run Template
+        run: |
+          helm template stockdevops-release gitops/apps/stockdevops/ -f gitops/apps/stockdevops/values-prod.yaml > rendered-manifests.yaml
+          cat rendered-manifests.yaml
+
+      # 8. Run kube-linter to check security and best practice compliance
+      - name: Scan Manifests with KubeLinter
+        uses: stackrox/kube-linter-action@v1.0.4
+        with:
+          directory: gitops/infrastructure/
+          # Optional: point to custom config if needed, otherwise uses standard defaults

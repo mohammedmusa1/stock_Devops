@@ -1,0 +1,98 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-db-pvc
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}-db
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: stockdevops
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.postgresql.storage.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.storage.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-db
+  labels:
+    app: {{ .Release.Name }}-db
+    app.kubernetes.io/name: {{ .Chart.Name }}-db
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: stockdevops
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-db
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-db
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          value: "stockforge_ai"
+        - name: POSTGRES_USER
+          value: "stockforge"
+        - name: POSTGRES_PASSWORD
+          value: "stockforge_prod_db_pass" # In production, pull from stockdevops-db-secret instead
+        resources:
+          {{- toYaml .Values.postgresql.resources | nindent 10 }}
+        volumeMounts:
+        - name: db-data
+          mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - stockforge
+            - -d
+            - stockforge_ai
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - stockforge
+            - -d
+            - stockforge_ai
+          initialDelaySeconds: 15
+          periodSeconds: 10
+      volumes:
+      - name: db-data
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-db-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-db
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}-db
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: stockdevops
+spec:
+  ports:
+    - port: 5432
+      targetPort: postgres
+      name: postgres
+  selector:
+    app: {{ .Release.Name }}-db
+{{- end }}

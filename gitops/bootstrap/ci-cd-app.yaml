@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stockdevops-ci-cd
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: ci-cd-app
+    app.kubernetes.io/part-of: stockdevops-gitops
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/mohammedmusa1/stock_Devops.git"
+    targetRevision: HEAD
+    path: gitops/apps/ci-cd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ci-cd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - Validate=true

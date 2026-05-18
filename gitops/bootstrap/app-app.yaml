@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stockdevops-core-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: core-app
+    app.kubernetes.io/part-of: stockdevops-gitops
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/mohammedmusa1/stock_Devops.git"
+    targetRevision: HEAD
+    path: gitops/apps/stockdevops
+    helm:
+      valueFiles:
+      - values-prod.yaml # Applies the high-availability resource-optimized settings
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devops-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - Validate=true

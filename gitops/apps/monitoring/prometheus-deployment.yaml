@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-storage-pvc
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: stockdevops-monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: stockdevops-gp3-sc # Provision gp3 storage
+  resources:
+    requests:
+      storage: 10Gi # 10Gi is more than enough for retention history on t3.large
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-deployment
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: stockdevops-monitoring
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # Required for RWO Persistent Volumes
+  selector:
+    matchLabels:
+      app: prometheus-server
+  template:
+    metadata:
+      labels:
+        app: prometheus-server
+    spec:
+      securityContext:
+        fsGroup: 65534 # Default Prometheus UID is 65534 (nobody)
+        runAsUser: 65534
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.51.1 # Stable Prometheus version
+        imagePullPolicy: IfNotPresent
+        args:
+          - "--config.file=/etc/prometheus/prometheus.yml"
+          - "--storage.tsdb.path=/prometheus"
+          - "--storage.tsdb.retention.time=15d" # 15 days metrics retention
+          - "--web.enable-lifecycle" # Allows live reloading config via HTTP POST
+        ports:
+        - containerPort: 9090
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1.5Gi
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        volumeMounts:
+        - name: prometheus-config-volume
+          mountPath: /etc/prometheus/
+        - name: prometheus-storage-volume
+          mountPath: /prometheus
+      volumes:
+      - name: prometheus-config-volume
+        configMap:
+          name: prometheus-server-conf
+      - name: prometheus-storage-volume
+        persistentVolumeClaim:
+          claimName: prometheus-storage-pvc

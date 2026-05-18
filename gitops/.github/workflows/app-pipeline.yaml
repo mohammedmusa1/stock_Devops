@@ -1,0 +1,104 @@
+name: "Continuous Integration & GitOps CD Trigger"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/**' # Only trigger when code under NestJS/NextJS changes
+      - 'docker/**'
+      - '.github/workflows/app-pipeline.yaml'
+
+jobs:
+  build-and-push:
+    name: "Build Containers & Trigger ArgoCD"
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout Application Repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Setup Node.js Environment for Testing & Auditing
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies & Run Tests
+        run: |
+          npm ci
+          npm run test --if-present
+
+      # 3. Setup Docker Buildx for High-Performance Multi-Stage Builds
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 4. Authenticate to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      # 5. Generate Short Git SHA Tag for Production Releases
+      - name: Generate Release Tag
+        id: vars
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      # 6. Build and Push NestJS API Production Image
+      - name: Build & Push Backend NestJS API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            mohammedmusa1/stockdevops-api:${{ steps.vars.outputs.sha_short }}
+            mohammedmusa1/stockdevops-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 7. Build and Push NextJS Web Production Image
+      - name: Build & Push Frontend NextJS Web
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: |
+            mohammedmusa1/stockdevops-web:${{ steps.vars.outputs.sha_short }}
+            mohammedmusa1/stockdevops-web:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 8. GitOps CD Transition Step: Check out and update the GitOps repository
+      - name: Checkout GitOps Repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'mohammedmusa1/stock_Devops' # Points to your GitOps repository
+          token: ${{ secrets.GITOPS_GIT_TOKEN }}   # GitHub Personal Access Token (PAT)
+          path: gitops-repo
+
+      # 9. Modify Values file inside GitOps checkout
+      - name: Update Image Tags in values-prod.yaml
+        run: |
+          cd gitops-repo
+          # Use sed to update values-prod.yaml image tags dynamically to the fresh short SHA
+          sed -i 's/tag: .*/tag: "${{ steps.vars.outputs.sha_short }}"/' gitops/apps/stockdevops/values-prod.yaml
+          
+          # Git configuration
+          git config --global user.email "github-actions-bot@stockdevops.com"
+          git config --global user.name "GitHub CI-CD Automation Bot"
+          
+          # Commit the change to trigger ArgoCD auto-sync
+          git add gitops/apps/stockdevops/values-prod.yaml
+          git commit -m "chore(deploy): auto-release version ${{ steps.vars.outputs.sha_short }} to devops-prod namespace [skip ci]"
+          git push origin HEAD:main
