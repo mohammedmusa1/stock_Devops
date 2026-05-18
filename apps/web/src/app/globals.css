@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+/* Light theme (default class on html: no .dark) */
+:root {
+  --bg: #f8fafc;
+  --bg-elevated: #ffffff;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --border: rgba(99, 102, 241, 0.15);
+  --glass: rgba(255, 255, 255, 0.85);
+  --accent-from: #0891b2;
+  --accent-to: #7c3aed;
+  --positive: #059669;
+  --negative: #e11d48;
+  --grid-line: rgba(99, 102, 241, 0.06);
+}
+
+.dark {
+  --bg: #030712;
+  --bg-elevated: rgba(15, 23, 42, 0.85);
+  --foreground: #e2e8f0;
+  --muted: #94a3b8;
+  --border: rgba(99, 102, 241, 0.2);
+  --glass: rgba(15, 23, 42, 0.75);
+  --accent-from: #22d3ee;
+  --accent-to: #8b5cf6;
+  --positive: #34d399;
+  --negative: #fb7185;
+  --grid-line: rgba(99, 102, 241, 0.05);
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
+  --color-foreground: var(--foreground);
+}
+
+body {
+  background: var(--bg);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  min-height: 100vh;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.grid-bg {
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+}
+
+.neon-text {
+  background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+  color: white;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+}
+
+.input-field {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--foreground);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent-from);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+}
+
+.ticker-scroll {
+  animation: ticker 40s linear infinite;
+}
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}

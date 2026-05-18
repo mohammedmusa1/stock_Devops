@@ -1,0 +1,76 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Environment (NEVER commit secrets)
+.env
+.env.local
+.env.*.local
+.env.production
+!.env.example
+!.env.production.example
+!.env.local.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Testing
+coverage/
+
+# Prisma
+apps/backend/prisma/migrations/**/migration_lock.toml
+
+# Docker & Containerization Exclusions
+docker-data/
+docker/
+docker-compose*.yml
+.dockerignore
+**/Dockerfile
+
+# DevOps, Infrastructure, and Script Exclusions (Deployment Omitted)
+infrastructure/
+scripts/
+*.bat
+*.ps1
+*.sh
+
+# DevOps Deployment & Operations Documentation
+ARGOCD_GUIDE.md
+ARGODOC_GUIDE.md
+AWS_FREE_TIER_DEPLOYMENT.md
+AWS_SETUP_GUIDE.md
+COMMANDS_REFERENCE.md
+COMPLETE_LEARNING_GUIDE.md
+DEPLOYMENT_GUIDE.md
+DEPLOYMENT_GUIDE_ENTERPRISE.md
+DEPLOYMENT_RUNBOOK.md
+DEPLOYMENT_STATUS.md
+DEVOPS_GUIDE.md
+ENTERPRISE_GITOPS_GUIDE.md
+JENKINS_GUIDE.md
+KUBERNETES_GUIDE.md
+MONITORING_GUIDE.md
+TERRAFORM_GUIDE.md
+
+# Secrets
+*.pem
+*.key
+credentials.json

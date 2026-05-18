@@ -1,0 +1,304 @@
+// StockForge AI - Trading Platform Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+}
+
+enum OrderStatus {
+  PENDING
+  FILLED
+  PARTIALLY_FILLED
+  CANCELLED
+  REJECTED
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  BUY
+  SELL
+  FEE
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  STRIPE
+  RAZORPAY
+  UPI
+  MANUAL
+}
+
+enum AlertCondition {
+  ABOVE
+  BELOW
+}
+
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  passwordHash  String?
+  firstName     String
+  lastName      String
+  phone         String?
+  role          UserRole   @default(USER)
+  status        UserStatus @default(PENDING_VERIFICATION)
+  emailVerified Boolean    @default(false)
+  mfaEnabled    Boolean    @default(false)
+  avatarUrl     String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  wallet        Wallet?
+  refreshTokens       RefreshToken[]
+  verificationTokens  VerificationToken[]
+  passwordResetTokens PasswordResetToken[]
+  orders        Order[]
+  watchlists    WatchlistItem[]
+  priceAlerts   PriceAlert[]
+  notifications Notification[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model VerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model Wallet {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance       Decimal  @default(0) @db.Decimal(18, 2)
+  lockedBalance Decimal  @default(0) @db.Decimal(18, 2)
+  currency      String   @default("INR")
+  updatedAt     DateTime @updatedAt
+
+  transactions Transaction[]
+  ledger       LedgerEntry[]
+
+  @@map("wallets")
+}
+
+model LedgerEntry {
+  id            String          @id @default(uuid())
+  walletId      String
+  wallet        Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  transactionId String?
+  transaction   Transaction?    @relation(fields: [transactionId], references: [id])
+  type          TransactionType
+  amount        Decimal         @db.Decimal(18, 2)
+  balanceAfter  Decimal         @db.Decimal(18, 2)
+  description   String
+  createdAt     DateTime        @default(now())
+
+  @@index([walletId])
+  @@map("ledger_entries")
+}
+
+model Transaction {
+  id                String            @id @default(uuid())
+  walletId          String
+  wallet            Wallet            @relation(fields: [walletId], references: [id])
+  type              TransactionType
+  status            TransactionStatus @default(PENDING)
+  amount            Decimal           @db.Decimal(18, 2)
+  provider          PaymentProvider?
+  providerRefId     String?
+  metadata          Json?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  ledgerEntries LedgerEntry[]
+
+  @@index([walletId])
+  @@index([providerRefId])
+  @@map("transactions")
+}
+
+model Stock {
+  id           String   @id @default(uuid())
+  symbol       String   @unique
+  name         String
+  exchange     String   @default("NSE")
+  sector       String?
+  currentPrice Decimal  @db.Decimal(18, 4)
+  previousClose Decimal @db.Decimal(18, 4)
+  dayHigh      Decimal  @db.Decimal(18, 4)
+  dayLow       Decimal  @db.Decimal(18, 4)
+  volume       BigInt   @default(0)
+  marketCap    Decimal? @db.Decimal(20, 2)
+  isActive     Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
+
+  holdings    Holding[]
+  orders      Order[]
+  watchlists  WatchlistItem[]
+  priceAlerts PriceAlert[]
+  priceHistory PriceHistory[]
+
+  @@index([symbol])
+  @@map("stocks")
+}
+
+model PriceHistory {
+  id        String   @id @default(uuid())
+  stockId   String
+  stock     Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  price     Decimal  @db.Decimal(18, 4)
+  volume    BigInt   @default(0)
+  timestamp DateTime @default(now())
+
+  @@index([stockId, timestamp])
+  @@map("price_history")
+}
+
+model Holding {
+  id           String   @id @default(uuid())
+  userId       String
+  stockId      String
+  stock        Stock    @relation(fields: [stockId], references: [id])
+  quantity     Decimal  @db.Decimal(18, 6)
+  avgBuyPrice  Decimal  @db.Decimal(18, 4)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, stockId])
+  @@index([userId])
+  @@map("holdings")
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  stockId     String
+  stock       Stock       @relation(fields: [stockId], references: [id])
+  side        OrderSide
+  type        OrderType   @default(MARKET)
+  status      OrderStatus @default(PENDING)
+  quantity    Decimal     @db.Decimal(18, 6)
+  limitPrice  Decimal?    @db.Decimal(18, 4)
+  filledPrice Decimal?    @db.Decimal(18, 4)
+  filledQty   Decimal     @default(0) @db.Decimal(18, 6)
+  totalAmount Decimal?    @db.Decimal(18, 2)
+  fee         Decimal     @default(0) @db.Decimal(18, 2)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([stockId])
+  @@index([status])
+  @@map("orders")
+}
+
+model WatchlistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stockId   String
+  stock     Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, stockId])
+  @@map("watchlist_items")
+}
+
+model PriceAlert {
+  id        String         @id @default(uuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stockId   String
+  stock     Stock          @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  condition AlertCondition
+  targetPrice Decimal      @db.Decimal(18, 4)
+  isActive  Boolean        @default(true)
+  triggeredAt DateTime?
+  createdAt DateTime       @default(now())
+
+  @@index([userId])
+  @@map("price_alerts")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
