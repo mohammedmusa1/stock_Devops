@@ -1,5 +1,5 @@
 # =========================================================================
-# Jenkins Helm values.yaml - Highly Optimized for AWS EC2 t3.micro (1GB RAM)
+# Jenkins Helm values.yaml - Ultra-Lightweight Tuning for AWS t3.micro
 # =========================================================================
 
 controller:
@@ -8,71 +8,66 @@ controller:
   tag: "2.555.2-jdk21"
   imagePullPolicy: "IfNotPresent"
 
-  # 1. Safe JVM Settings - Limit heap memory to 256MB to fit within 1GB RAM safely
+  # 1. Aggressively Bounded JVM Heap (Strictly bounds Java memory usage to 256MB)
   javaOpts: "-Xms128m -Xmx256m -XX:MaxRAMPercentage=50.0 -Djenkins.install.runSetupWizard=false"
 
-  # 2. Aggressive Resource Allocation optimized for t3.micro (prevents OOM Kills)
+  # 2. Strict Controller Resource Limits to Fit within 1GB K3s Cluster
   resources:
     requests:
       cpu: "50m"
       memory: "128Mi"
     limits:
-      cpu: "200m"
+      cpu: "250m"
       memory: "384Mi"
 
-  # 3. Safe Init Container Tuning (Fixes Init:CrashLoopBackOff)
-  # Give the init container enough memory to fetch plugins without running out of RAM
+  # 3. CRITICAL: Disable Init Container Plugin Installs to Stop CrashLoopBackOff
+  # Downloading plugins during initialization consumes massive virtual memory and CPU,
+  # causing immediate OOM kills. We set this to empty to ensure stable and instant startup.
+  installPlugins: []
+
+  # 4. Safe Resource Allocation for the Init Container
   initResources:
     requests:
-      cpu: "50m"
-      memory: "128Mi"
+      cpu: "30m"
+      memory: "64Mi"
     limits:
-      cpu: "200m"
-      memory: "256Mi"
+      cpu: "100m"
+      memory: "128Mi"
 
-  # 4. Bare Minimum Essential Plugins (Saves significant download and memory footprint)
-  installPlugins:
-    - "git:5.2.1"
-    - "workflow-aggregator:596.v8c21c963d92d"
-    - "credentials-binding:681.ve91277174dcc"
-    - "github:1.38.0"
-
-  # 5. NodePort Exposure on Port 32000
+  # 5. NodePort 32000 Configuration (Bypasses LoadBalancer Costs)
   serviceType: "NodePort"
   servicePort: 8080
   nodePort: 32000
 
-  # Agent communication port (Disable if not running multiple pods, or expose minimally)
+  # Agent inbound connection port
   agentListenerPort: 50000
 
-  # 6. Generous Probes to Allow t3.micro Slow Java Warmup Without Premature Restarts
+  # 6. Generous Health Probes to prevent early container termination on slow t3.micro CPU
   livenessProbe:
     enabled: true
-    initialDelaySeconds: 180
+    initialDelaySeconds: 240
     periodSeconds: 20
     timeoutSeconds: 10
     failureThreshold: 6
   readinessProbe:
     enabled: true
-    initialDelaySeconds: 150
+    initialDelaySeconds: 180
     periodSeconds: 15
     timeoutSeconds: 10
     failureThreshold: 6
 
-  # 7. Disable Config-as-Code (JCasC) and other sidecars to eliminate memory overhead
+  # 7. Disable Sidecars & Telemetry Overhead to Preserve Every Megabyte of RAM
   sidecars:
     configAutoReload:
       enabled: false
 
-  # Disable prometheus instrumentation inside Jenkins to save RAM
   prometheus:
     enabled: false
 
-# 8. Disable Persistence (Ephemenal setup for lightweight learning)
+# 8. Disable Disk Persistence (Avoids GP3 volume mounting delays and state-tracking overhead)
 persistence:
   enabled: false
 
-# 9. Disable Agent (Executor) Pod Provisioning Overhead
-# Disable dynamically launching agent pods which will crash the t3.micro instantly
+# 9. Disable Jenkins Agent (Executor) Spawn Engine (Keeps setup single-pod only)
 agent:
   enabled: false
