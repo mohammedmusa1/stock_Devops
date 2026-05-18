@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-sa
+  namespace: ci-cd
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/part-of: stockdevops-ci-cd
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-executor-role
+  namespace: ci-cd
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/part-of: stockdevops-ci-cd
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/exec", "pods/log"]
+  verbs: ["*"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-executor-binding
+  namespace: ci-cd
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/part-of: stockdevops-ci-cd
+subjects:
+- kind: ServiceAccount
+  name: jenkins-sa
+  namespace: ci-cd
+roleRef:
+  kind: Role
+  name: jenkins-executor-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# We also grant Jenkins permissions inside the devops-prod namespace to do deployments and validation
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-deployer-role
+  namespace: devops-prod
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/part-of: stockdevops-ci-cd
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "persistentvolumeclaims", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "replicasets"]
+  verbs: ["*"]
+- apiGroups: ["argoproj.io"]
+  resources: ["rollouts", "applications"]
+  verbs: ["get", "list", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-deployer-binding
+  namespace: devops-prod
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/part-of: stockdevops-ci-cd
+subjects:
+- kind: ServiceAccount
+  name: jenkins-sa
+  namespace: ci-cd # Jenkins ServiceAccount is located in the ci-cd namespace
+roleRef:
+  kind: Role
+  name: jenkins-deployer-role
+  apiGroup: rbac.authorization.k8s.io

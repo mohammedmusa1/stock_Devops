@@ -1,0 +1,23 @@
+# ==========================================
+# 3. SERVICE MANIFEST (stockdevops-service)
+# ==========================================
+# Exposes the pods internally and binds a stable NodePort to make it publicly accessible.
+apiVersion: v1
+kind: Service
+metadata:
+  name: stockdevops-service
+  namespace: stockdevops
+  labels:
+    app: stockdevops-app
+spec:
+  # Using NodePort so we don't need a heavy external Cloud LoadBalancer (saves costs)
+  type: NodePort
+  ports:
+  - port: 80         # Internal port exposed inside the Kubernetes cluster
+    targetPort: 80   # Destination port inside the container
+    nodePort: 30080  # Publicly exposed port on the AWS EC2 Host instance (30000-32767 range)
+    protocol: TCP
+    name: http
+  selector:
+    # Binds directly to the pods carrying the matching label from the deployment
+    app: stockdevops-app

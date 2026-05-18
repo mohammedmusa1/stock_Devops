@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stockdevops-root-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io # Deletes child resources if this app is deleted
+  labels:
+    app.kubernetes.io/name: root-app
+    app.kubernetes.io/part-of: stockdevops-gitops
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/mohammedmusa1/stock_Devops.git"
+    targetRevision: HEAD
+    path: gitops/bootstrap # Points to this folder where sub-application manifests live
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true       # Automatically deletes resources no longer defined in Git
+      selfHeal: true    # Automatically overrides manual changes in the cluster (drift correction)
+    syncOptions:
+    - CreateNamespace=true
+    - Validate=true

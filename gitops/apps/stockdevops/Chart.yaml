@@ -1,0 +1,13 @@
+apiVersion: v2
+name: stockdevops
+description: A production-ready Helm chart for the StockDevOps microservices platform (API, Web, DB, Cache)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - nextjs
+  - nestjs
+  - postgresql
+  - redis
+  - enterprise
+  - gitops

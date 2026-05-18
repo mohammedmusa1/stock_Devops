@@ -1,0 +1,60 @@
+# ==========================================
+# 2. DEPLOYMENT MANIFEST (stockdevops-app)
+# ==========================================
+# Manages the lifecycle of our web application pods with a declarative schema.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stockdevops-app
+  namespace: stockdevops
+  labels:
+    app: stockdevops-app
+    tier: frontend
+    environment: production
+spec:
+  # Single replica is used to maintain an extremely small memory footprint on t3.micro
+  replicas: 1
+  # Keep only the last 3 replicasets for rollbacks to prevent history bloat on K3s storage
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: stockdevops-app
+  template:
+    metadata:
+      labels:
+        app: stockdevops-app
+    spec:
+      containers:
+      - name: nginx-app
+        # Using alpine-based NGINX to ensure minimal container size (~10MB) and fast boot times
+        image: nginx:1.25-alpine
+        # Saves AWS egress costs and startup time by utilizing locally cached images if they exist
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        # Optimized resources to fit smoothly within the 1GB RAM of t3.micro without bottlenecking the system
+        resources:
+          requests:
+            cpu: 50m       # Reserved: 0.05 CPU cores
+            memory: 64Mi   # Reserved: 64 MB RAM
+          limits:
+            cpu: 100m      # Cap: 0.1 CPU cores max limit
+            memory: 128Mi  # Cap: 128 MB RAM max limit (OOM prevention)
+        # Checks if the container needs to be restarted due to deadlocks or server freezes
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        # Checks if the pod is ready to accept incoming client traffic (used by the Service)
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      # Always restart the container if it fails (Best practice for automated self-healing)
+      restartPolicy: Always

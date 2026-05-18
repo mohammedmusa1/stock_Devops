@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-storage-pvc
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: stockdevops-monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: stockdevops-gp3-sc
+  resources:
+    requests:
+      storage: 5Gi # 5Gi is plenty for storing dashboard layouts and alert states
