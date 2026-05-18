@@ -1,0 +1,78 @@
+# =========================================================================
+# Jenkins Helm values.yaml - Highly Optimized for AWS EC2 t3.micro (1GB RAM)
+# =========================================================================
+
+controller:
+  componentName: "jenkins-controller"
+  image: "jenkins/jenkins"
+  tag: "2.555.2-jdk21"
+  imagePullPolicy: "IfNotPresent"
+
+  # 1. Safe JVM Settings - Limit heap memory to 256MB to fit within 1GB RAM safely
+  javaOpts: "-Xms128m -Xmx256m -XX:MaxRAMPercentage=50.0 -Djenkins.install.runSetupWizard=false"
+
+  # 2. Aggressive Resource Allocation optimized for t3.micro (prevents OOM Kills)
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "384Mi"
+
+  # 3. Safe Init Container Tuning (Fixes Init:CrashLoopBackOff)
+  # Give the init container enough memory to fetch plugins without running out of RAM
+  initResources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+  # 4. Bare Minimum Essential Plugins (Saves significant download and memory footprint)
+  installPlugins:
+    - "git:5.2.1"
+    - "workflow-aggregator:596.v8c21c963d92d"
+    - "credentials-binding:681.ve91277174dcc"
+    - "github:1.38.0"
+
+  # 5. NodePort Exposure on Port 32000
+  serviceType: "NodePort"
+  servicePort: 8080
+  nodePort: 32000
+
+  # Agent communication port (Disable if not running multiple pods, or expose minimally)
+  agentListenerPort: 50000
+
+  # 6. Generous Probes to Allow t3.micro Slow Java Warmup Without Premature Restarts
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 180
+    periodSeconds: 20
+    timeoutSeconds: 10
+    failureThreshold: 6
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 150
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 6
+
+  # 7. Disable Config-as-Code (JCasC) and other sidecars to eliminate memory overhead
+  sidecars:
+    configAutoReload:
+      enabled: false
+
+  # Disable prometheus instrumentation inside Jenkins to save RAM
+  prometheus:
+    enabled: false
+
+# 8. Disable Persistence (Ephemenal setup for lightweight learning)
+persistence:
+  enabled: false
+
+# 9. Disable Agent (Executor) Pod Provisioning Overhead
+# Disable dynamically launching agent pods which will crash the t3.micro instantly
+agent:
+  enabled: false
