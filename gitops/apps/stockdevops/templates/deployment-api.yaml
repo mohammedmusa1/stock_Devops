@@ -49,8 +49,22 @@ spec:
             secretKeyRef:
               name: stockdevops-db-secret
               key: database-url
+        - name: JWT_ACCESS_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: stockdevops-db-secret
+              key: jwt-access-secret
+        - name: JWT_REFRESH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: stockdevops-db-secret
+              key: jwt-refresh-secret
         - name: REDIS_URL
           value: "redis://{{ .Release.Name }}-redis:6379"
+        - name: FRONTEND_URL
+          value: "http://stockdevops.mohammedmusa.dev"
+        - name: EMAIL_FROM
+          value: "onboarding@resend.dev"
         resources:
           {{- toYaml .Values.api.resources | nindent 10 }}
         livenessProbe:
