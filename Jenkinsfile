@@ -41,9 +41,29 @@ pipeline {
             }
         }
 
-        stage('Deploy To Kubernetes') {
+        stage('Update GitOps Manifests') {
             steps {
-                sh 'kubectl apply -f k8s/'
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
+                        sh '''
+                        # Configure Git
+                        git config user.email "jenkins@stockdevops.com"
+                        git config user.name "Jenkins GitOps"
+
+                        # Update the Kustomize image tag for production
+                        cd k8s/overlays/prod
+                        
+                        # Use kustomize or sed to update the image
+                        sed -i "s|namespace: devops-prod|namespace: devops-prod\\nimages:\\n- name: localhost:5000/$IMAGE_NAME\\n  newTag: '$IMAGE_TAG'|" kustomization.yaml
+                        
+                        # Commit and push
+                        cd ../../..
+                        git add k8s/overlays/prod/kustomization.yaml
+                        git commit -m "GitOps Update: Deploy build $IMAGE_TAG to production"
+                        git push https://${GIT_USER}:${GIT_PASS}@github.com/mohammedmusa1/stock_Devops.git HEAD:devops
+                        '''
+                    }
+                }
             }
         }
     }
