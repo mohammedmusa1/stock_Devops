@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
       - name: stockdevops-app
-        image: zishan001/stockdevops-app:latest
-        imagePullPolicy: Always
+        image: localhost:5000/stockdevops-app:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
         resources:

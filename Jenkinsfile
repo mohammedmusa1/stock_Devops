@@ -31,25 +31,13 @@ pipeline {
 
         stage('Tag Docker Image') {
             steps {
-                sh 'docker tag $IMAGE_NAME:$IMAGE_TAG $DOCKERHUB_USER/$IMAGE_NAME:latest'
-            }
-        }
-
-        stage('Docker Login') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                }
+                sh 'docker tag $IMAGE_NAME:$IMAGE_TAG localhost:5000/$IMAGE_NAME:latest'
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                sh 'docker push $DOCKERHUB_USER/$IMAGE_NAME:latest'
+                sh 'docker push localhost:5000/$IMAGE_NAME:latest'
             }
         }
 
