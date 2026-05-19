@@ -25,6 +25,7 @@ COPY . .
 # Set building environment variables
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 # Compile Next.js project
 RUN npm run build --workspace=apps/web
