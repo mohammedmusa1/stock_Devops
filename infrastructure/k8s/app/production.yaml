@@ -1,0 +1,135 @@
+---
+# 1. Namespaces and Service Accounts
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stockforge-prod
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stockforge-app-sa
+  namespace: stockforge-prod
+
+---
+# 2. Advanced Rollout Deployment (Blue/Green & Canary capabilities using Argo Rollouts)
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: api-rollout
+  namespace: stockforge-prod
+spec:
+  replicas: 3
+  strategy:
+    canary:
+      steps:
+      - setWeight: 20       # Route 20% of traffic to new version
+      - pause: {duration: 5m} # Wait 5 minutes to check health
+      - setWeight: 50       # Increase to 50%
+      - pause: {duration: 10m}
+      # If all health checks pass, it automatically scales to 100%
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      serviceAccountName: stockforge-app-sa
+      affinity:
+        # Node Affinity & Pod Anti-Affinity for high availability
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - api
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: api
+        image: yourdockerhub/stockforge-api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 4000
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 4000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 4000
+          initialDelaySeconds: 30
+          periodSeconds: 15
+
+---
+# 3. Horizontal Pod Autoscaler (HPA)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-hpa
+  namespace: stockforge-prod
+spec:
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: api-rollout
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+
+---
+# 4. Pod Disruption Budget (Self-healing & High Availability during node drains)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: stockforge-prod
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api
+
+---
+# 5. Network Policy (Zero-Trust Security - only frontend can talk to backend)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-network-policy
+  namespace: stockforge-prod
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: web
+    ports:
+    - protocol: TCP
+      port: 4000

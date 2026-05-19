@@ -9,7 +9,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: stockdevops-gp3-sc
+  storageClassName: local-path
   resources:
     requests:
       storage: 5Gi # 5Gi is plenty for storing dashboard layouts and alert states

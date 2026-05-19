@@ -1,0 +1,97 @@
+# Kube-Prometheus-Stack - Ultra-Lightweight config for single-node cluster
+prometheusOperator:
+  enabled: true
+  resources:
+    requests:
+      cpu: "30m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    replicas: 1
+    retention: "1d" # Extremely low retention to save memory and disk
+    scrapeInterval: "30s"
+    evaluationInterval: "30s"
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "256Mi"
+      limits:
+        cpu: "250m"
+        memory: "512Mi" # Under 700MB limit
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: "local-path"
+          resources:
+            requests:
+              storage: "5Gi"
+
+alertmanager:
+  enabled: false # Disabled alertmanager to save memory (saves ~100MB)
+
+grafana:
+  enabled: true
+  adminPassword: "admin123"
+  resources:
+    requests:
+      cpu: "30m"
+      memory: "128Mi"
+    limits:
+      cpu: "150m"
+      memory: "256Mi" # Under 300MB limit
+  service:
+    type: NodePort
+    nodePort: 30030
+  persistence:
+    enabled: true
+    storageClassName: "local-path"
+    size: "2Gi"
+  # Custom preloaded dashboards
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      kubernetes-cluster:
+        gnetId: 12740
+        revision: 1
+        datasource: Prometheus
+      jenkins-monitoring:
+        gnetId: 9964
+        revision: 1
+        datasource: Prometheus
+
+prometheus-node-exporter:
+  enabled: true
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "16Mi"
+    limits:
+      cpu: "30m"
+      memory: "32Mi"
+
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "50m"
+      memory: "64Mi"

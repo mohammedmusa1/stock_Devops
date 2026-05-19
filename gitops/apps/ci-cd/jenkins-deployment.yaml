@@ -34,14 +34,14 @@ spec:
           containerPort: 50000 # Inbound agent port
         env:
         - name: JAVA_OPTS
-          value: "-Xms512m -Xmx1024m -XX:+UseG1GC" # Direct JVM tuning to honor K8s resource constraints
+          value: "-Xms256m -Xmx512m -XX:+UseSerialGC -Dhudson.model.AbstractProject.FIFO=true"
         resources:
           requests:
-            cpu: 100m
-            memory: 1Gi
+            cpu: 50m
+            memory: 384Mi
           limits:
-            cpu: 1000m
-            memory: 1.5Gi
+            cpu: 500m
+            memory: 768Mi
         livenessProbe:
           httpGet:
             path: /login

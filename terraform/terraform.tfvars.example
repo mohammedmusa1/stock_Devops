@@ -1,0 +1,7 @@
+ec2_public_ip        = "13.xxx.xxx.xxx"
+ssh_private_key_path = "C:/Users/YourName/Downloads/stockdevops.pem"
+github_repo          = "https://github.com/username/stockdevops"
+github_branch        = "main"
+dockerhub_username   = "username"
+dockerhub_token      = "token"
+ssh_user             = "ubuntu"

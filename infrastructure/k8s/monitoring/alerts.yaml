@@ -1,0 +1,79 @@
+---
+# Prometheus Alerting Rules for Enterprise Drift, Crash, and Recovery
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stockforge-enterprise-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+  - name: stockforge.alerts
+    rules:
+    # 1. Pod Crash Alert (Detects CrashLoopBackOff)
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total{namespace="stockforge-prod"}[5m]) > 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} is crashing"
+        description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} has been restarting repeatedly for 2 minutes."
+
+    # 2. Deployment Failure Alert
+    - alert: DeploymentFailed
+      expr: kube_deployment_status_observed_generation{namespace="stockforge-prod"} != kube_deployment_spec_replicas
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Deployment Failed/Stuck"
+        description: "Deployment has not matched desired replica count for 5 minutes. Rollout may have failed."
+
+    # 3. ArgoCD Drift Detection Alert
+    - alert: GitOpsDriftDetected
+      expr: argocd_app_info{sync_status="OutOfSync"} == 1
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "GitOps Drift Detected on {{ $labels.name }}"
+        description: "Application {{ $labels.name }} drifted from Git source of truth. ArgoCD selfHeal should auto-correct this."
+
+    # 4. Cluster Unhealthy
+    - alert: ClusterNodeUnhealthy
+      expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Kubernetes Node is down"
+        description: "Node {{ $labels.node }} has been unready for 5 minutes."
+
+---
+# Alertmanager Configuration (Routes to Email via Resend)
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: email-alerts
+  namespace: monitoring
+spec:
+  route:
+    groupBy: ['alertname', 'namespace']
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    receiver: 'devops-email'
+  receivers:
+  - name: 'devops-email'
+    emailConfigs:
+    - to: 'devops@stockforge.ai'
+      from: 'alerts@stockforge.ai'
+      smarthost: 'smtp.resend.com:465'
+      authUsername: 'resend'
+      authPassword:
+        name: resend-smtp-secret
+        key: password
+      requireTLS: true
+      sendResolved: true # Triggers "Pod Recovery" and "Drift Corrected" emails
