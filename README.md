@@ -1,206 +1,159 @@
-# stock_Devops
+# StockDevOps Platform Deployment Guide
 
-Welcome to the **stock_Devops** code repository. This branch is a premium, **code-only** version of the project workspace. 
+This repository contains the complete Infrastructure-as-Code (IaC), GitOps, CI/CD, and monitoring configuration for the **StockDevOps** platform. 
 
-> [!IMPORTANT]
-> **DevOps & Infrastructure Omission Notice**
-> To keep this repository secure, lightweight, and focused purely on application code, all deployment configurations, infrastructure templates, automation scripts, Docker files, and environment secrets have been omitted. This includes:
-> - **Infrastructure as Code (IaC):** Terraform templates (`infrastructure/terraform/`, `AWS_SETUP_GUIDE.md`)
-> - **Orchestration & GitOps:** Kubernetes manifests, Helm charts, ArgoCD configurations (`infrastructure/k8s/`, `infrastructure/helm/`, `ARGOCD_GUIDE.md`)
-> - **Continuous Integration (CI/CD):** Jenkins pipelines, Ansible playbooks (`infrastructure/ci-cd/`, `infrastructure/ansible/`, `JENKINS_GUIDE.md`)
-> - **Containerization:** Dockerfiles, Docker Compose configurations (`docker/`, `docker-compose*.yml`, `.dockerignore`, `Dockerfile` files)
-> - **DevOps Scripts:** Setup, verification, bootstrap, and cleanup script files (`scripts/`, `*.bat`, `*.sh`, `*.ps1`)
-> - **Secrets & Configurations:** All `.env` files, SSH keys, PEM keys, and API credentials
+It is designed for a **single-node Kubernetes cluster (k3s)** running on a manually created AWS EC2 instance (e.g. `t3.large` or `c7i-flex.large` with 2 vCPUs and 4GB RAM) running Ubuntu 22.04 LTS.
 
 ---
 
-## 🏗️ Project Architecture & Subprojects
+## 🏗️ Architectural Overview
 
-The repository is structured as a monorepo containing two distinct application ecosystems:
+The deployment uses a lightweight, highly optimized, production-ready single-node Kubernetes architecture:
 
 ```
-stock_Devops (Monorepo)
-├── apps/
-│   ├── api/          <-- StockForge AI Backend API (NestJS, Prisma, PostgreSQL, Redis)
-│   ├── web/          <-- StockForge AI Web Terminal (Next.js 16, Tailwind, Framer Motion)
-│   ├── backend/      <-- CloudCart Pro Backend API (Express, TypeScript, Prisma, PostgreSQL)
-│   └── frontend/     <-- CloudCart Pro Web Frontend (Next.js 16, React Query, Tailwind)
-├── package.json      <-- Root package config (defines StockForge workspaces)
-└── README.md         <-- This documentation
+                  +-------------------------------------------------+
+                  |                 AWS EC2 Instance                |
+                  |             (2 vCPU, 4GB RAM, Ubuntu)           |
+                  +-------------------------------------------------+
+                                           |
+                                    [ k3s Container ]
+                                           |
+    +------------------+-----------+-------+-------+--------------------+
+    |                  |           |               |                    |
+[ Jenkins ]       [ ArgoCD ]  [ Traefik ]    [ Prometheus ]        [ Grafana ]
+(Port 30080)     (Port 30085) (Port 80/443)  (Port 30090)         (Port 30030)
+```
+
+### Key Technical Specs & Resource Limits
+- **k3s Kubernetes**: Lightweight orchestration engine with built-in Traefik Ingress.
+- **Jenkins (CI/CD)**: Bounded JVM (`-Xmx512m`), limited to **768MB RAM**, host-level Docker socket integration for zero-overhead container builds.
+- **ArgoCD (GitOps)**: Self-healing, pruning, auto-sync active, dex disabled, limited to **500MB RAM**.
+- **Prometheus**: Single replica, **1-day data retention**, limited to **512MB RAM**.
+- **Grafana**: Preloaded Kubernetes and Jenkins dashboards, NodePort service exposed, limited to **256MB RAM**.
+
+---
+
+## 📂 Project Structure
+
+```
+stockdevops/
+├── terraform/                       <-- Terraform Configuration
+│   ├── main.tf                      <-- Provisioning null_resource block
+│   ├── variables.tf                 <-- Input parameters
+│   ├── outputs.tf                   <-- Outputs access URLs
+│   ├── providers.tf                 <-- Configures providers
+│   ├── versions.tf                  <-- Minimum version requirements
+│   └── terraform.tfvars.example     <-- Pre-filled template values
+├── kubernetes/                      <-- Core Manifests
+│   ├── namespaces.yaml              <-- Namespaces configuration
+│   ├── rbac.yaml                    <-- ClusterRoleBindings & SAs
+│   └── ingress.yaml                 <-- Traefik Ingress definitions
+├── helm/                            <-- Helm Values Configuration
+│   ├── jenkins-values.yaml          <-- Optimized Jenkins values
+│   ├── argocd-values.yaml           <-- Bounded memory ArgoCD values
+│   └── prometheus-values.yaml       <-- Lightweight Prometheus values
+├── argocd/                          <-- ArgoCD Bootstrappers
+│   ├── root-app.yaml                <-- Main GitOps entrypoint
+│   ├── ci-cd-app.yaml               <-- CI/CD (Jenkins) bootstrapper
+│   ├── monitoring-app.yaml          <-- Monitoring bootstrapper
+│   └── app-app.yaml                 <-- Core Application bootstrapper
+├── monitoring/                      <-- Custom Alert Rules
+│   └── alerts.yaml                  <-- CrashLoop, Drift, & Node Alerts
+├── scripts/                         <-- Automation Scripts
+│   ├── setup.sh                     <-- Main remote provisioning script
+│   ├── deploy-all.sh                <-- Local manual deploy tool
+│   ├── health-check.sh              <-- Endpoint & status validation tool
+│   └── verify.sh                    <-- Extracts credentials & debug commands
+├── github-actions/                  <-- CI Workflows
+│   └── ci-cd-workflow.yaml          <-- GitHub Actions automated build
+├── Jenkinsfile                      <-- Root Jenkins Pipeline
+└── README.md                        <-- This documentation
 ```
 
 ---
 
-## 🛠️ Global Prerequisites
+## 🚀 Execution & Deployment Guide
 
-Before installing any of the subprojects, ensure you have the following services running locally on your machine:
+Follow this precise order to provision and configure the entire cluster:
 
-- **Node.js:** `>=20.0.0` (with `npm >=10.0.0`)
-- **PostgreSQL:** `>=15.0` (Active database server)
-- **Redis:** `>=7.0` (Active key-value store for caching and session management)
+### Step 1: Manually Create the EC2 Instance
+1. Launch an AWS EC2 Instance using **Ubuntu 22.04 LTS**.
+2. Select instance type: **t3.large** or **c7i-flex.large** (at least 2 vCPUs, 4GB RAM).
+3. Associate a public IP address and configure security groups to allow:
+   - SSH (Port `22`)
+   - HTTP/HTTPS (Ports `80`, `443`)
+   - NodePort range for tools: Ports `30000 - 32767` (specifically `30030`, `30080`, `30085`, `30090`)
+4. Download your SSH private key `.pem` file to your local computer.
 
----
-
-## 🚀 1. StockForge AI Setup (Active Project)
-
-StockForge AI is a state-of-the-art stock trading terminal & portfolio management platform. It uses **NestJS 11** for the backend API and **Next.js 16** for the trading terminal UI.
-
-### Step 1.1: Install Dependencies
-From the root directory (`d:\stockdevops`), run:
+### Step 2: Initialize Terraform Configurations
+Navigate to the `terraform/` directory:
 ```bash
-npm install
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
 ```
-*Note: This will install all dependencies for both the `apps/api` and `apps/web` workspaces using npm workspaces.*
+Edit `terraform.tfvars` with your exact values:
+```hcl
+ec2_public_ip        = "54.210.12.34" # IP of your created EC2
+ssh_private_key_path = "C:/Users/Shaikh Musa/.ssh/stockdevops-default-key.pem"
+github_repo          = "https://github.com/your-username/stock_Devops.git"
+github_branch        = "main"
+dockerhub_username   = "your-dockerhub-username"
+dockerhub_token      = "your-dockerhub-token"
+```
 
-### Step 1.2: Environment Setup
-Configure the environment variables by copying the examples:
+### Step 3: Run Terraform Apply
+Initialize and execute the Terraform configuration to connect to your EC2 instance and bootstrap the components:
+```bash
+terraform init
+terraform apply -auto-approve
+```
 
-1. **Backend API (`apps/api/.env`)**:
+Terraform will connect to the EC2 server, copy all files, install Docker/k3s/Helm, configure secrets, deploy the apps, and display endpoints.
+
+---
+
+## 🎯 Verification and Health Checks
+
+### Step 4: Extract Credentials
+After Terraform apply finishes, SSH into your EC2 instance and run `verify.sh`:
+```bash
+ssh -i <your-key-path> ubuntu@<ec2-public-ip>
+sudo /home/ubuntu/scripts/verify.sh
+```
+This outputs the exact admin passwords:
+- **Jenkins UI (admin)**: Auto-generated random string
+- **ArgoCD Dashboard (admin)**: Auto-generated random string
+- **Grafana Console (admin)**: `admin123`
+
+### Step 5: Check System Health
+Run `health-check.sh` on the EC2 instance to verify all services are active:
+```bash
+sudo /home/ubuntu/scripts/health-check.sh
+```
+
+---
+
+## 🛠️ Access Endpoints
+- **Jenkins UI**: `http://<ec2-public-ip>:30080`
+- **ArgoCD UI**: `https://<ec2-public-ip>:30085` (Uses self-signed TLS)
+- **Grafana Console**: `http://<ec2-public-ip>:30030`
+- **Prometheus Console**: `http://<ec2-public-ip>:30090`
+
+---
+
+## 🛑 Troubleshooting Guide
+1. **Pod fails to start (CrashLoopBackOff)**:
+   View logs of the specific container:
    ```bash
-   cp apps/api/.env.example apps/api/.env
+   kubectl logs -n <namespace> -l app=<app-label> --tail=100
    ```
-   Open `apps/api/.env` and update your PostgreSQL connection URL, Redis URL, and JWT secrets:
-   ```env
-   DATABASE_URL="postgresql://stockforge:stockforge_dev_password@localhost:5432/stockforge_ai?schema=public"
-   REDIS_URL="redis://localhost:6379"
-   JWT_ACCESS_SECRET="generate_random_hex_64_chars"
-   JWT_REFRESH_SECRET="generate_random_hex_64_chars"
-   ```
-
-2. **Frontend UI (`apps/web/.env.local`)**:
+2. **Kubernetes API not responding**:
+   Verify that k3s is active:
    ```bash
-   cp apps/web/.env.local.example apps/web/.env.local
+   sudo systemctl status k3s
    ```
-
-### Step 1.3: Run Database Migrations & Seeding
-Prepare your PostgreSQL database schema and populate it with initial trading mock assets:
-```bash
-# Generate Prisma Client & run migrations
-npm run db:migrate --workspace=apps/api
-
-# Seed the database with trading data and demo accounts
-npm run db:seed --workspace=apps/api
-```
-
-### Step 1.4: Run the Application Locally
-To run both the NestJS API and Next.js Web Terminal concurrently:
-```bash
-npm run dev
-```
-
-Alternatively, you can run them individually:
-* **Run API Only:** `npm run dev:api` (Runs on `http://localhost:4000`)
-* **Run Web Terminal Only:** `npm run dev:web` (Runs on `http://localhost:3000`)
-
----
-
-## 🛍️ 2. CloudCart Pro Setup (Legacy Project)
-
-CloudCart Pro is a high-performance e-commerce platform. It uses **Express + TypeScript** for the backend API and **Next.js 16** for the frontend store.
-
-### Step 2.1: Install Dependencies
-Navigate into each workspace and install their respective node modules:
-
-```bash
-# Install Backend dependencies
-cd apps/backend
-npm install
-
-# Install Frontend dependencies
-cd ../frontend
-npm install
-```
-
-### Step 2.2: Environment Setup
-Configure the local environment files for both services:
-
-1. **Backend API (`apps/backend/.env`)**:
+3. **Docker permission issues in Jenkins**:
+   Ensure `/var/run/docker.sock` has `666` permissions:
    ```bash
-   cd apps/backend
-   cp .env.example .env
+   sudo chmod 666 /var/run/docker.sock
    ```
-   Open `.env` and verify your connection strings:
-   ```env
-   PORT=4000
-   DATABASE_URL="postgresql://cloudcart:cloudcart_dev_password@localhost:5432/cloudcart_pro?schema=public"
-   REDIS_URL="redis://localhost:6379"
-   CORS_ORIGIN="http://localhost:3000"
-   JWT_ACCESS_SECRET="generate_random_hex_64_chars"
-   ```
-
-2. **Frontend Store (`apps/frontend/.env.local`)**:
-   ```bash
-   cd ../frontend
-   cp .env.local.example .env.local
-   ```
-
-### Step 2.3: Database Setup for CloudCart
-Initialize the PostgreSQL schema and client for the CloudCart backend:
-```bash
-cd ../backend
-# Generate Prisma Client
-npm run db:generate
-
-# Execute database migrations
-npm run db:migrate
-```
-
-### Step 2.4: Run the Application Locally
-Run the backend and frontend separately in two terminal windows:
-
-* **Terminal 1 (Backend API):**
-  ```bash
-  cd apps/backend
-  npm run dev
-  ```
-  *(Runs on `http://localhost:4000/api/v1`)*
-
-* **Terminal 2 (Frontend Store):**
-  ```bash
-  cd apps/frontend
-  npm run dev
-  ```
-  *(Runs on `http://localhost:3000`)*
-
----
-
-## 💎 Demo Credentials (StockForge AI)
-To test the live stock-trading terminal terminal UI immediately, log in using the following credentials:
-
-* **Trader Account:**
-  - **Email:** `trader@stockforge.local`
-  - **Password:** `Trader@12345`
-  - **Starting Wallet Balance:** ₹5,00,000
-* **Admin Account:**
-  - **Email:** `admin@stockforge.local`
-  - **Password:** `Admin@12345`
-
----
-
-## 📈 Supported API Routes (StockForge AI Phase 1)
-
-* **Authentication:**
-  - `POST /auth/register` — Register a new trader account
-  - `POST /auth/login` — Log in and retrieve session tokens
-  - `POST /auth/refresh` — Refresh expired JWT access token
-  - `POST /auth/logout` — Revoke session token
-  - `GET /auth/me` — Retrieve active session profile details
-* **Market Data:**
-  - `GET /stocks` — Retrieve list of tracked stock tickers
-  - `GET /stocks/:symbol` — Retrieve single ticker statistics
-* **Portfolio & Wallet:**
-  - `GET /portfolio` — Get active stocks holding summary
-  - `GET /wallet` — Get current wallet balance
-  - `POST /wallet/deposit` — Simulate deposit of funds into wallet
-* **Trading Terminal:**
-  - `POST /trading/:symbol/order` — Place a market BUY or SELL order
-  - `GET /trading/orders` — Retrieve complete history of placed orders
-* **Watchlist Management:**
-  - `GET /watchlist/:symbol` — Verify if a stock is watchlisted
-  - `POST /watchlist/:symbol` — Add a stock symbol to watchlist
-  - `DELETE /watchlist/:symbol` — Remove a stock symbol from watchlist
-* **Realtime WebSockets (Socket.IO):**
-  - `price:update` — Real-time live stock pricing ticks
-  - `ticker:snapshot` — Daily market summary ticks
-  - `wallet:update` — Live trader wallet adjustment notifications
-  - `portfolio:update` — Live portfolio valuation shifts

@@ -1,0 +1,95 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+        GIT_CREDENTIALS_ID = 'github-credentials'
+        REGISTRY = 'yourdockerhub'
+        API_IMAGE = "${REGISTRY}/stockforge-api"
+        WEB_IMAGE = "${REGISTRY}/stockforge-web"
+        TAG = "v${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
+        GITOPS_REPO = 'https://github.com/your-org/stockforge-gitops.git'
+    }
+
+    stages {
+        stage('Checkout & Lint') {
+            steps {
+                checkout scm
+                sh 'npm run lint --if-present'
+            }
+        }
+
+        stage('Security Scanning (Trivy)') {
+            steps {
+                // Pre-build filesystem scan
+                sh 'trivy fs --severity HIGH,CRITICAL --exit-code 0 .'
+            }
+        }
+
+        stage('Build API & Web Images') {
+            steps {
+                script {
+                    docker.build("${API_IMAGE}:${TAG}", "-f apps/api/Dockerfile .")
+                    docker.build("${WEB_IMAGE}:${TAG}", "-f apps/web/Dockerfile .")
+                }
+            }
+        }
+
+        stage('Image Scanning') {
+            steps {
+                // Scan the built images before pushing
+                sh "trivy image --severity HIGH,CRITICAL ${API_IMAGE}:${TAG}"
+                sh "trivy image --severity HIGH,CRITICAL ${WEB_IMAGE}:${TAG}"
+            }
+        }
+
+        stage('Push to Registry') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
+                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                    sh "docker push ${API_IMAGE}:${TAG}"
+                    sh "docker push ${WEB_IMAGE}:${TAG}"
+                    
+                    // Tag and push latest
+                    sh "docker tag ${API_IMAGE}:${TAG} ${API_IMAGE}:latest"
+                    sh "docker tag ${WEB_IMAGE}:${TAG} ${WEB_IMAGE}:latest"
+                    sh "docker push ${API_IMAGE}:latest"
+                    sh "docker push ${WEB_IMAGE}:latest"
+                }
+            }
+        }
+
+        stage('Trigger GitOps Deployment') {
+            steps {
+                // Clone the config repository and update the image tags
+                withCredentials([usernamePassword(credentialsId: "${GIT_CREDENTIALS_ID}", passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
+                    sh '''
+                    git clone https://${GIT_USER}:${GIT_PASS}@github.com/your-org/stockforge-gitops.git
+                    cd stockforge-gitops
+                    
+                    # Update deployment manifests with new tags using sed
+                    sed -i "s|image: ${API_IMAGE}:.*|image: ${API_IMAGE}:${TAG}|g" infrastructure/k8s/app/production.yaml
+                    sed -i "s|image: ${WEB_IMAGE}:.*|image: ${WEB_IMAGE}:${TAG}|g" infrastructure/k8s/app/production.yaml
+                    
+                    git config user.email "jenkins@stockforge.ai"
+                    git config user.name "Jenkins CI"
+                    git add infrastructure/k8s/app/production.yaml
+                    git commit -m "chore(deploy): release ${TAG} to production"
+                    git push origin main
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        failure {
+            mail to: 'devops@stockforge.ai',
+                 subject: "Failed Pipeline: ${currentBuild.fullDisplayName}",
+                 body: "Something went wrong. Check Jenkins logs."
+        }
+        success {
+            echo "Pipeline succeeded! ArgoCD will now detect the drift and auto-sync the new images."
+        }
+    }
+}

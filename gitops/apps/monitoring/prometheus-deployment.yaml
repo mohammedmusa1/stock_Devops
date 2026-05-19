@@ -9,10 +9,10 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: stockdevops-gp3-sc # Provision gp3 storage
+  storageClassName: local-path # K3s local storage
   resources:
     requests:
-      storage: 10Gi # 10Gi is more than enough for retention history on t3.large
+      storage: 10Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -50,11 +50,11 @@ spec:
         - containerPort: 9090
         resources:
           requests:
-            cpu: 100m
-            memory: 512Mi
+            cpu: 50m
+            memory: 256Mi
           limits:
-            cpu: 1000m
-            memory: 1.5Gi
+            cpu: 500m
+            memory: 768Mi
         livenessProbe:
           httpGet:
             path: /-/healthy

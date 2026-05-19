@@ -10,7 +10,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: stockdevops-gp3-sc # Dynamically provisioned gp3 EBS volume
+  storageClassName: local-path # K3s local storage
   resources:
     requests:
       storage: 15Gi # Generous volume for build artifacts, plugins, and job history

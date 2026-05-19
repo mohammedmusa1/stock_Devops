@@ -1,0 +1,89 @@
+controller:
+  componentName: "jenkins-controller"
+  # Support both older and newer Helm chart image structures
+  image: "docker.io/library/custom-jenkins"
+  tag: "latest"
+  imagePullPolicy: "Never"
+  
+  image:
+    repository: "docker.io/library/custom-jenkins"
+    tag: "latest"
+    pullPolicy: "Never"
+
+  # Force the chown init container to use the same local image
+  chownImage:
+    repository: "docker.io/library/custom-jenkins"
+    tag: "latest"
+    pullPolicy: "Never"
+
+  # Force init containers to use the exact same local image and policy
+  initContainerImage: "docker.io/library/custom-jenkins"
+  initContainerTag: "latest"
+  initContainerPullPolicy: "Never"
+  
+  # Resource requests and limits
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "768Mi" # Under 1GB limit
+
+  # JVM options optimized for low memory
+  javaOpts: "-Xms256m -Xmx512m -XX:+UseSerialGC -Dhudson.model.AbstractProject.FIFO=true"
+
+  # Service type NodePort
+  serviceType: "NodePort"
+  servicePort: 8080
+  nodePort: 30080
+
+  agentListenerPort: 50000
+
+  # Install essential plugins
+  installPlugins:
+    - kubernetes:4441.v98f6d6d7b_7c9
+    - workflow-aggregator:596.v8c21c963d92d
+    - git:5.2.1
+    - docker-workflow:572.v300f12984eb_5
+    - credentials-binding:642.v7374c20e48a_2
+
+  # Mount host Docker socket for zero-overhead docker builds on host daemon
+  extraVolumes:
+    - name: docker-socket
+      hostPath:
+        path: /var/run/docker.sock
+        type: Socket
+  extraVolumeMounts:
+    - name: docker-socket
+      mountPath: /var/run/docker.sock
+
+  # Probes optimized for slow CPU startup
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 180
+    periodSeconds: 20
+    timeoutSeconds: 10
+    failureThreshold: 5
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 120
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 5
+
+persistence:
+  enabled: true
+  storageClass: "local-path"
+  size: "10Gi"
+
+# Enable Kubernetes integration
+agent:
+  enabled: true
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "150m"
+      memory: "128Mi"

@@ -1,0 +1,29 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: stockdevops-gp3-sc
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false" # Keep local-path as default in k3s, use this for high-perf AWS GP3 EBS
+  labels:
+    app.kubernetes.io/name: storage
+    app.kubernetes.io/part-of: stockdevops-infra
+provisioner: ebs.csi.aws.com # AWS EBS CSI Provisioner for EC2
+volumeBindingMode: WaitForFirstConsumer # Important: Schedules volumes on the same AZ as the pod
+reclaimPolicy: Retain # Retain volume even if PVC is deleted (Production-grade safety)
+allowVolumeExpansion: true
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+  encrypted: "true"
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: stockdevops-local-sc
+  labels:
+    app.kubernetes.io/name: storage
+    app.kubernetes.io/part-of: stockdevops-infra
+provisioner: kubernetes.io/no-provisioner # For local persistent volumes on k3s Node
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain

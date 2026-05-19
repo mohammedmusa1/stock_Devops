@@ -1,0 +1,73 @@
+# =========================================================================
+# Jenkins Helm values.yaml - Ultra-Lightweight Tuning for AWS t3.micro
+# =========================================================================
+
+controller:
+  componentName: "jenkins-controller"
+  image: "jenkins/jenkins"
+  tag: "2.555.2-jdk21"
+  imagePullPolicy: "IfNotPresent"
+
+  # 1. Aggressively Bounded JVM Heap (Strictly bounds Java memory usage to 256MB)
+  javaOpts: "-Xms128m -Xmx256m -XX:MaxRAMPercentage=50.0 -Djenkins.install.runSetupWizard=false"
+
+  # 2. Strict Controller Resource Limits to Fit within 1GB K3s Cluster
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "384Mi"
+
+  # 3. CRITICAL: Disable Init Container Plugin Installs to Stop CrashLoopBackOff
+  # Downloading plugins during initialization consumes massive virtual memory and CPU,
+  # causing immediate OOM kills. We set this to empty to ensure stable and instant startup.
+  installPlugins: []
+
+  # 4. Safe Resource Allocation for the Init Container
+  initResources:
+    requests:
+      cpu: "30m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+  # 5. NodePort 32000 Configuration (Bypasses LoadBalancer Costs)
+  serviceType: "NodePort"
+  servicePort: 8080
+  nodePort: 32000
+
+  # Agent inbound connection port
+  agentListenerPort: 50000
+
+  # 6. Generous Health Probes to prevent early container termination on slow t3.micro CPU
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 240
+    periodSeconds: 20
+    timeoutSeconds: 10
+    failureThreshold: 6
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 180
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 6
+
+  # 7. Disable Sidecars & Telemetry Overhead to Preserve Every Megabyte of RAM
+  sidecars:
+    configAutoReload:
+      enabled: false
+
+  prometheus:
+    enabled: false
+
+# 8. Disable Disk Persistence (Avoids GP3 volume mounting delays and state-tracking overhead)
+persistence:
+  enabled: false
+
+# 9. Disable Jenkins Agent (Executor) Spawn Engine (Keeps setup single-pod only)
+agent:
+  enabled: false

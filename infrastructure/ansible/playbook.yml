@@ -1,0 +1,60 @@
+---
+# Ansible — configure Ubuntu 24.04 EC2 for Name Stock AI
+# Run from your laptop: ansible-playbook -i 'EC2_IP,' -u ubuntu --private-key key.pem playbook.yml
+
+- name: Bootstrap Name Stock AI server
+  hosts: all
+  become: true
+  vars:
+    install_k3s: false
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install packages
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - git
+          - ufw
+          - htop
+        state: present
+
+    - name: Install Docker
+      shell: curl -fsSL https://get.docker.com | sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: true
+
+    - name: Install Docker Compose plugin
+      apt:
+        name: docker-compose-plugin
+        state: present
+
+    - name: UFW allow SSH, HTTP, HTTPS
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: ["22", "80", "443"]
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    - name: Install k3s (optional)
+      when: install_k3s | bool
+      shell: curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode 644" sh -
+      args:
+        creates: /usr/local/bin/k3s

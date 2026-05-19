@@ -1,0 +1,79 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stockdevops-unified-ingress
+  namespace: devops-prod
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # Enables automatic SSL certificate generation via Let's Encrypt / Cert-Manager
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+    # Enforces HTTPS redirect
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Sets maximum upload size (useful for API files/profiles)
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # Implements CORS controls
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "PUT, GET, POST, OPTIONS, DELETE"
+spec:
+  tls:
+  - hosts:
+    - stockdevops.mohammedmusa.dev
+    secretName: stockdevops-tls-cert
+  rules:
+  - host: stockdevops.mohammedmusa.dev
+    http:
+      paths:
+      # 1. Routes frontend web interface
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: stockdevops-web
+            port:
+              number: 3000
+      # 2. Routes backend NestJS API
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: stockdevops-api
+            port:
+              number: 4000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-tools-ingress
+  namespace: kube-system # Ingress for global platform tools
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+    # Zero-trust: restricts tools access to specific IP ranges (e.g., corporate VPN)
+    # nginx.ingress.kubernetes.io/whitelist-source-range: "192.168.1.0/24,10.0.0.0/8"
+spec:
+  tls:
+  - hosts:
+    - jenkins.mohammedmusa.dev
+    - grafana.mohammedmusa.dev
+    secretName: devops-tools-tls-cert
+  rules:
+  - host: jenkins.mohammedmusa.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jenkins
+            port:
+              number: 8080
+  - host: grafana.mohammedmusa.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana-service
+            port:
+              number: 3000

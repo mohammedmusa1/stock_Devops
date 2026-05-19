@@ -51,7 +51,7 @@ postgresql:
   enabled: true
   storage:
     size: 10Gi
-    storageClass: stockdevops-gp3-sc
+    storageClass: local-path
   resources:
     requests:
       cpu: 100m

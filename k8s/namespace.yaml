@@ -5,7 +5,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: stockdevops
+  name: devops-prod
   labels:
     # Standard Kubernetes labels for resource discovery and grouping
     app.kubernetes.io/name: stockdevops

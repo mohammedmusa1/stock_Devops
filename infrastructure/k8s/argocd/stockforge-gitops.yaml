@@ -1,0 +1,64 @@
+# ArgoCD Project Configuration (Multi-tenant environment isolation)
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: stockforge-prod-project
+  namespace: argocd
+spec:
+  description: StockForge Production GitOps Project
+  sourceRepos:
+  - "https://github.com/your-org/stockforge-gitops.git"
+  destinations:
+  - namespace: stockforge-prod
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'
+
+---
+# ArgoCD Application (Declarative state & Drift Correction)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stockforge-production
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: stockforge-prod-project
+  source:
+    repoURL: "https://github.com/your-org/stockforge-gitops.git"
+    targetRevision: HEAD
+    path: infrastructure/k8s/app
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stockforge-prod
+  syncPolicy:
+    # AUTOMATIC DRIFT CORRECTION
+    automated:
+      prune: true        # Remove resources not in Git
+      selfHeal: true     # Revert manual changes made via kubectl back to Git state
+      allowEmpty: false
+    syncOptions:
+    - CreateNamespace=true
+    - Validate=true      # Validates Kubernetes YAML before applying
+    - PrunePropagationPolicy=foreground
+    - PruneLast=true
+
+---
+# ArgoCD RBAC ConfigMap (Least Privilege for GitOps UI)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+data:
+  policy.default: role:readonly
+  policy.csv: |
+    p, role:devops, applications, get, stockforge-prod-project/*, allow
+    p, role:devops, applications, sync, stockforge-prod-project/*, allow
+    p, role:devops, applications, update, stockforge-prod-project/*, allow
+    g, devops-team-group, role:devops

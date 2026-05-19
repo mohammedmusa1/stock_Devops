@@ -1,0 +1,57 @@
+global:
+  image:
+    repository: quay.io/argoproj/argocd
+    tag: v2.10.4
+    imagePullPolicy: IfNotPresent
+
+# Single replica and optimized resource limits for all ArgoCD sub-components
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+dex:
+  enabled: false # Disabled to save RAM (saves ~100MB)
+
+redis:
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "50m"
+      memory: "64Mi"
+
+server:
+  replicas: 1
+  service:
+    type: NodePort
+    nodePortHttp: 30085
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "150m"
+      memory: "128Mi"
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: "30m"
+      memory: "64Mi"
+    limits:
+      cpu: "150m"
+      memory: "128Mi"
+
+applicationSet:
+  enabled: false # Disabled to save RAM
+
+notifications:
+  enabled: false # Disabled to save RAM

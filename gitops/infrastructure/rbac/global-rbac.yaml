@@ -1,0 +1,66 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devops-read-only-role
+  labels:
+    app.kubernetes.io/name: rbac
+    app.kubernetes.io/part-of: stockdevops-infra
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "endpoints", "configmaps", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets", "statefulsets", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devops-admin-role
+  labels:
+    app.kubernetes.io/name: rbac
+    app.kubernetes.io/part-of: stockdevops-infra
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+# Bind devops-read-only role to standard developer group (simulated here)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devops-global-read-only-binding
+subjects:
+- kind: Group
+  name: "developers-group"
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: devops-read-only-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Dedicated ServiceAccount for GitOps App Reconciliation
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gitops-reconciler-sa
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gitops-reconciler-binding
+subjects:
+- kind: ServiceAccount
+  name: gitops-reconciler-sa
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
